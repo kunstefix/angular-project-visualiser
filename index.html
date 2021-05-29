@@ -1,0 +1,146 @@
+<head>
+  <style>
+    body {
+      margin: 0;
+      background-color: black;
+    }
+  </style>
+
+  <script src="//unpkg.com/3d-force-graph"></script>
+  <!--<script src="../../dist/3d-force-graph.js"></script>-->
+</head>
+
+<body>
+  <input placeholder="Component class name" id="componentName" value="AppComponent" />
+  <button onclick="findNode()" type="submit">Find</button>
+  <div id="3d-graph"></div>
+
+  <script>
+    const elem = document.getElementById("3d-graph");
+    let doubleClick = false;
+    const highlightNodes = new Set();
+    const highlightLinks = new Set();
+    let selectedNode = null;
+    let Graph = null;
+    let data = null;
+
+    fetch("./data.json")
+      .then((response) => {
+        return response.json();
+      })
+      .then((responseData) => {
+        data = responseData;
+        createGraph(data);
+      });
+
+    function createGraph(data) {
+      const gData = createCrossLinks(data);
+
+      Graph = ForceGraph3D()(elem)
+        .graphData(gData)
+        .nodeColor((node) =>
+          highlightNodes.has(node)
+            ? node === selectedNode
+              ? "rgb(255,0,0,1)"
+              : "rgba(255,160,0,0.8)"
+            : "rgba(0,255,255,0.6)"
+        )
+        .linkWidth((link) => (highlightLinks.has(link) ? 4 : 1))
+        .linkDirectionalParticles((link) => (highlightLinks.has(link) ? 4 : 0))
+        .linkDirectionalParticleWidth(4)
+        .onNodeHover((node) => (elem.style.cursor = node ? "pointer" : null))
+        .onNodeDragEnd((node) => {
+          node.fx = node.x;
+          node.fy = node.y;
+          node.fz = node.z;
+        })
+        .onNodeClick((node) => highlightSelectedNodes(node, Graph))
+        .onLinkClick((link) => {
+          highlightNodes.clear();
+          highlightLinks.clear();
+
+          if (link) {
+            highlightLinks.add(link);
+            highlightNodes.add(link.source);
+            highlightNodes.add(link.target);
+          }
+
+          updateHighlight(Graph);
+        });
+    }
+
+    function highlightSelectedNodes(node, graph) {
+      if (doubleClick && node.path) {
+        window.open(`vscode://file${node.path}`);
+      } else {
+        doubleClick = true;
+        setTimeout(() => {
+          doubleClick = false;
+        }, 200);
+
+        // no state change
+        if ((!node && !highlightNodes.size) || (node && selectedNode === node))
+          return;
+
+        highlightNodes.clear();
+        highlightLinks.clear();
+        if (node) {
+          highlightNodes.add(node);
+          node.neighbors.forEach((neighbor) => highlightNodes.add(neighbor));
+          node.links.forEach((link) => highlightLinks.add(link));
+        }
+
+        selectedNode = node || null;
+
+        updateHighlight(graph);
+      }
+    }
+
+    function updateHighlight(graph) {
+      // trigger update of highlighted objects in scene
+      graph
+        .nodeColor(graph.nodeColor())
+        .linkWidth(graph.linkWidth())
+        .linkDirectionalParticles(graph.linkDirectionalParticles());
+    }
+
+    function createCrossLinks(data) {
+      // cross-link node objects
+
+      data.links.forEach((link) => {
+        const a = data.nodes[link.source];
+        const b = data.nodes[link.target];
+        !a.neighbors && (a.neighbors = []);
+        !b.neighbors && (b.neighbors = []);
+        a.neighbors.push(b);
+        b.neighbors.push(a);
+
+        !a.links && (a.links = []);
+        !b.links && (b.links = []);
+        a.links.push(link);
+        b.links.push(link);
+      });
+
+      return { ...data };
+    }
+
+    function findNode() {
+      let nodeName = document.getElementById("componentName").value;
+      const selectedNode = data.nodes.find((node) => node.name == nodeName);
+      highlightSelectedNodes(selectedNode, Graph);
+      focusNode(selectedNode);
+    }
+
+    function focusNode(node) {
+      // Aim at node from outside it
+      const distance = 300;
+      const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+
+      Graph.cameraPosition(
+        { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
+        node, // lookAt ({ x, y, z })
+        3000 // ms transition duration
+      );
+    }
+  </script>
+</body>

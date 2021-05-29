@@ -1,0 +1,17 @@
+{
+  "name": "ng-visualizer",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "visualize": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "http-server": "^0.12.3"
+  },
+  "bin": {
+    "ng-visualize": "bin/run.js"
+  }
+}
